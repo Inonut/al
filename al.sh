@@ -230,8 +230,9 @@ function install_gnome() {
   sudo systemctl enable gdm.service
   sudo systemctl start gdm.service
 
-  sudo mkdir -p /etc/init.d/
   cat <<EOT >> gnome-dconf
+#!/bin/bash
+
 gsettings set org.gnome.desktop.interface cursor-theme 'Breeze'
 gsettings set org.gnome.desktop.interface enable-animations true
 gsettings set org.gnome.desktop.interface gtk-im-module 'gtk-im-context-simple'
@@ -254,14 +255,36 @@ gsettings set org.gnome.shell disabled-extensions "[]"
 # gsettings set org.gnome.shell enabled-extensions ['user-theme@gnome-shell-extensions.gcampax.github.com']
 gsettings set org.gnome.shell.extensions.user-theme name 'Matcha-dark-sea'
 
+rm ~/.config/autostart/gnome-dconf.desktop
 rm \$0
+EOT
+
+  mkdir -p ~/.config/autostart/
+  cat <<EOT >> ~/.config/autostart/gnome-dconf.desktop
+[Desktop Entry]
+Comment[en_US]=
+Comment=
+Exec=./gnome-dconf
+GenericName[en_US]=
+GenericName=
+Icon=system-run
+MimeType=
+Name[en_US]=gnome-dconf
+Name=gnome-dconf
+Path=
+StartupNotify=true
+Terminal=false
+TerminalOptions=
+Type=Application
+X-DBUS-ServiceName=
+X-DBUS-StartupType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
 EOT
 
   chmod +x ./gnome-dconf
   if systemctl is-active --quiet dbus; then
     ./gnome-dconf
-  else
-    sudo mv gnome-dconf /etc/init.d/
   fi
 }
 
