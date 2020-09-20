@@ -29,6 +29,7 @@ options:
     --yay                 Install yay, tool for installing packages from AUR
     --ssh                 Configure ssh
     --gnome               Install gnome as user interface
+    --dynamic-wallpaper   Install variety to change wallpaper
     --chrome              Install Google Chrome
 
 '
@@ -150,11 +151,12 @@ function install_arch_uefi() {
   pacman -Sy --noconfirm reflector
   reflector --country 'Romania' --latest 25 --age 24 --protocol https --completion-percent 100 --sort rate --save /etc/pacman.d/mirrorlist
 
-  VIRTUALBOX=""
+  local VIRTUALBOX=""
   if lspci | grep -q -i virtualbox; then
     VIRTUALBOX=(virtualbox-guest-utils virtualbox-guest-dkms intel-ucode)
   fi
-  pacstrap /mnt base base-devel linux linux-headers networkmanager efibootmgr grub "${VIRTUALBOX[@]}"
+  local UTIL_TOOLS=(wget nano zip unzip bash-completion)
+  pacstrap /mnt base base-devel linux linux-headers networkmanager efibootmgr grub "${UTIL_TOOLS[@]}" "${VIRTUALBOX[@]}"
 
   {
     echo "[multilib]"
@@ -226,11 +228,13 @@ function install_gnome() {
     install_yay
   fi
 
-  yay -S --noconfirm gnome gnome-extra matcha-gtk-theme bash-completion xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus
+  yay -S --noconfirm gnome gnome-extra matcha-gtk-theme bash-completion xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus chrome-gnome-shell git
+  yay -Rs --noconfirm gnome-terminal
+  yay -S --noconfirm gnome-terminal-transparency
   sudo systemctl enable gdm.service
   sudo systemctl start gdm.service
 
-  cat <<EOT >> gnome-dconf
+  cat <<'EOT' >> gnome-dconf
 #!/bin/bash
 
 gsettings set org.gnome.desktop.interface cursor-theme 'Breeze'
@@ -252,11 +256,43 @@ gsettings set org.gnome.gedit.preferences.editor wrap-last-split-mode 'word'
 gsettings set org.gnome.shell disable-user-extensions false
 gsettings set org.gnome.shell enabled-extensions "['TopIcons@phocean.net']"
 gsettings set org.gnome.shell disabled-extensions "[]"
-# gsettings set org.gnome.shell enabled-extensions ['user-theme@gnome-shell-extensions.gcampax.github.com']
 gsettings set org.gnome.shell.extensions.user-theme name 'Matcha-dark-sea'
+gsettings set org.gnome.shell.weather automatic-location true
+gsettings set org.gnome.system.location enabled true
+gsettings set org.gnome.desktop.wm.keybindings show-desktop "['<Super>d']"
+gsettings set org.gnome.desktop.wm.keybindings switch-applications "@as []"
+gsettings set org.gnome.desktop.wm.keybindings switch-applications-backward "@as []"
+gsettings set org.gnome.desktop.wm.keybindings switch-windows "['<Alt>Tab']"
+gsettings set org.gnome.desktop.wm.keybindings switch-windows-backward "['<Shift><Alt>Tab']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys home "['<Super>e']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys www "['<Super>g']"
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding '<Primary><Alt>t'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command 'gnome-terminal'
+gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name 'terminal'
+
+git clone https://github.com/arcticicestudio/nord-gnome-terminal.git
+cd nord-gnome-terminal/src
+./nord.sh
+rm -fr nord-gnome-terminal
+
+query=$(dconf dump /org/gnome/terminal/legacy/profiles:/ | awk '/\[:/||/visible-name=/')
+lines=( $query )
+for i in "${!lines[@]}"; do
+  if [[ "${lines[$i]}" == "visible-name='Nord'" ]]; then
+    var=$(echo ${lines[$i - 1]} | tr -d ] | tr -d [ | tr -d :)
+ fi
+done
+
+dconf write /org/gnome/terminal/legacy/profiles:/:$var/scrollbar-policy "'never'"
+dconf write /org/gnome/terminal/legacy/profiles:/:$var/use-transparent-background "true"
+dconf write /org/gnome/terminal/legacy/profiles:/:$var/background-transparency-percent "9"
+dconf write /org/gnome/terminal/legacy/profiles:/:$var/default-size-columns "100"
+dconf write /org/gnome/terminal/legacy/profiles:/:$var/default-size-rows "27"
+dconf write /org/gnome/terminal/legacy/profiles:/default "'$var'"
 
 rm ~/.config/autostart/gnome-dconf.desktop
-rm \$0
+rm $0
 EOT
 
   mkdir -p ~/.config/autostart/
@@ -286,6 +322,27 @@ EOT
   if systemctl is-active --quiet dbus; then
     ./gnome-dconf
   fi
+
+  cat <<EOT >> ~/.bashrc
+alias ll='ls -alF'
+PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
+EOT
+}
+
+function install_dynamic_wallpaper() {
+  sudo pacman -S --noconfirm variety
+#  mkdir -p ~/.config/variety
+#  date +"%Y-%m-%d %H:%M:%S" > ~/.config/variety/.firstrun
+#  variety -n &
+  echo 'Use interface to configure it!'
+}
+
+function install_chrome() {
+  if ! pacman -Q | grep yay; then
+    install_yay
+  fi
+
+  yay -S --noconfirm google-chrome
 }
 
 function arguments_handler() {
@@ -336,12 +393,27 @@ function arguments_handler() {
       remove_el_from_args --gnome
       install_gnome
     fi
+    if [[ "${ARGS[*]}" =~ --dynamic-wallpaper ]]; then
+      remove_el_from_args --dynamic-wallpaper
+      install_dynamic_wallpaper
+    fi
+    if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
+      remove_el_from_args --chrome
+      install_chrome
+    fi
   fi
 }
 
 function main() {
   local ARGS=("$@")
   arguments_handler "${ARGS[@]}"
+
+  exit 1
 }
 
+echo '********ARCH********************'
+echo '*******************LINUX********'
 main "$@"
+echo '*******SUCCESSFULLY*************'
+echo '*****************INSTALLED******'
+echo 'Some of the configurations will be set after reboot only once!'

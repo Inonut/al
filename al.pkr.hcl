@@ -8,7 +8,7 @@ locals {
 source "virtualbox-iso" "arch-linux" {
   guest_os_type = "ArchLinux_64"
   guest_additions_mode = "disable"
-  headless = true
+  headless = false
   http_directory = "."
   vboxmanage = [
     ["modifyvm", "{{.Name}}", "--memory", "2048"],
@@ -22,7 +22,7 @@ source "virtualbox-iso" "arch-linux" {
   iso_checksum = "file:https://mirrors.kernel.org/archlinux/iso/${local.arch_version}.01/sha1sums.txt"
   ssh_username = "${local.ssh_username}"
   ssh_password = "${local.ssh_password}"
-  boot_wait = "30s"
+  boot_wait = "40s"
   ssh_timeout = "40m"
   shutdown_command = "sudo systemctl poweroff"
   boot_command = [
@@ -30,7 +30,7 @@ source "virtualbox-iso" "arch-linux" {
     "chmod +x ./al.sh<enter>",
     "./al.sh --install-arch-uefi --log --all-packages<enter><wait5>",
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/srv/enable-ssh.sh<enter>",
-    "/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
+    "s/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
   ]
 }
 
