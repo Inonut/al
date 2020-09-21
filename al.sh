@@ -62,16 +62,16 @@ function read_variables() {
 }
 
 function generate_defaults() {
+  echo "Execute ${FUNCNAME[0]}"
   echo "$DEFAULT_OPTIONS" > al.conf
   echo "File al.conf was created!"
 }
 
 function init_log() {
+  echo "Execute ${FUNCNAME[0]}"
   local LOG_FILE
   read_variables LOG_FILE
   rm -f "$LOG_FILE"
-  exec 3>&1 4>&2
-  trap 'exec 2>&4 1>&3' 0 1 2 3
   exec 1>"$LOG_FILE" 2>&1
 }
 
@@ -101,6 +101,7 @@ function last_partition_end_mb() {
 }
 
 function install_arch_uefi() {
+  echo "Execute ${FUNCNAME[0]}"
   local FEATURES=( "$@" )
   local SWAPFILE="/swapfile"
   local PARTITION_OPTIONS="defaults,noatime"
@@ -218,17 +219,19 @@ function install_yay() {
 }
 
 function install_ssh() {
+  echo "Execute ${FUNCNAME[0]}"
   sudo pacman -S --noconfirm openssh
   sudo systemctl enable sshd.service
   sudo systemctl start sshd.service
 }
 
 function install_gnome() {
+  echo "Execute ${FUNCNAME[0]}"
   if ! pacman -Q | grep yay; then
     install_yay
   fi
 
-  yay -S --noconfirm gnome gnome-extra matcha-gtk-theme bash-completion xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus chrome-gnome-shell git
+  yay -S --noconfirm gnome gnome-extra matcha-gtk-theme bash-completion xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus git
   yay -Rs --noconfirm gnome-terminal
   yay -S --noconfirm gnome-terminal-transparency
   sudo systemctl enable gdm.service
@@ -329,7 +332,13 @@ PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
 EOT
 }
 
+function install_gnome_chrome_integration() {
+  echo "Execute ${FUNCNAME[0]}"
+  sudo pacman -S --noconfirm chrome-gnome-shell
+}
+
 function install_dynamic_wallpaper() {
+  echo "Execute ${FUNCNAME[0]}"
   sudo pacman -S --noconfirm variety
 #  mkdir -p ~/.config/variety
 #  date +"%Y-%m-%d %H:%M:%S" > ~/.config/variety/.firstrun
@@ -338,6 +347,7 @@ function install_dynamic_wallpaper() {
 }
 
 function install_chrome() {
+  echo "Execute ${FUNCNAME[0]}"
   if ! pacman -Q | grep yay; then
     install_yay
   fi
@@ -392,6 +402,9 @@ function arguments_handler() {
     if [[ "${ARGS[*]}" =~ --gnome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
       remove_el_from_args --gnome
       install_gnome
+      if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
+        install_gnome_chrome_integration
+      fi
     fi
     if [[ "${ARGS[*]}" =~ --dynamic-wallpaper ]]; then
       remove_el_from_args --dynamic-wallpaper
@@ -407,13 +420,8 @@ function arguments_handler() {
 function main() {
   local ARGS=("$@")
   arguments_handler "${ARGS[@]}"
-
-  exit 1
 }
 
-echo '********ARCH********************'
-echo '*******************LINUX********'
 main "$@"
-echo '*******SUCCESSFULLY*************'
-echo '*****************INSTALLED******'
-echo 'Some of the configurations will be set after reboot only once!'
+
+exit 1

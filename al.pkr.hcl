@@ -8,7 +8,7 @@ locals {
 source "virtualbox-iso" "arch-linux" {
   guest_os_type = "ArchLinux_64"
   guest_additions_mode = "disable"
-  headless = false
+  headless = true
   http_directory = "."
   vboxmanage = [
     ["modifyvm", "{{.Name}}", "--memory", "2048"],
@@ -30,7 +30,7 @@ source "virtualbox-iso" "arch-linux" {
     "chmod +x ./al.sh<enter>",
     "./al.sh --install-arch-uefi --log --all-packages<enter><wait5>",
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/srv/enable-ssh.sh<enter>",
-    "s/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
+    "/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
   ]
 }
 
