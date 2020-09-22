@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set +e
 
 DEFAULT_OPTIONS='
 # Used for Arch Linux Installer
@@ -25,7 +25,8 @@ options:
     --help                Show this help text
     --generate-defaults   Generate file al.conf
     --install-arch-uefi   Install Arch Linux in uefi mode, this erase all of your data
-    --all-packages        Install all available packages
+    --app-packages        Install all available packages
+    --dev-packages        Install all dev specific available packages
     --yay                 Install yay, tool for installing packages from AUR
     --ssh                 Configure ssh
     --gnome               Install gnome as user interface
@@ -33,6 +34,10 @@ options:
     --chrome              Install Google Chrome
 
 '
+
+function step() {
+  echo "*********************$1**********************"
+}
 
 function read_variables() {
   local VARIABLE_LIST=("$@")
@@ -62,13 +67,13 @@ function read_variables() {
 }
 
 function generate_defaults() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   echo "$DEFAULT_OPTIONS" > al.conf
   echo "File al.conf was created!"
 }
 
 function init_log() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   local LOG_FILE
   read_variables LOG_FILE
   rm -f "$LOG_FILE"
@@ -101,7 +106,7 @@ function last_partition_end_mb() {
 }
 
 function install_arch_uefi() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   local FEATURES=( "$@" )
   local SWAPFILE="/swapfile"
   local PARTITION_OPTIONS="defaults,noatime"
@@ -210,6 +215,7 @@ function install_arch_uefi() {
 }
 
 function install_yay() {
+  step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm git
   git clone https://aur.archlinux.org/yay.git
   cd yay
@@ -219,14 +225,14 @@ function install_yay() {
 }
 
 function install_ssh() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm openssh
   sudo systemctl enable sshd.service
   sudo systemctl start sshd.service
 }
 
 function install_gnome() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   if ! pacman -Q | grep yay; then
     install_yay
   fi
@@ -333,12 +339,12 @@ EOT
 }
 
 function install_gnome_chrome_integration() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm chrome-gnome-shell
 }
 
 function install_dynamic_wallpaper() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm variety
 #  mkdir -p ~/.config/variety
 #  date +"%Y-%m-%d %H:%M:%S" > ~/.config/variety/.firstrun
@@ -347,12 +353,24 @@ function install_dynamic_wallpaper() {
 }
 
 function install_chrome() {
-  echo "Execute ${FUNCNAME[0]}"
+  step "${FUNCNAME[0]}"
   if ! pacman -Q | grep yay; then
     install_yay
   fi
 
   yay -S --noconfirm google-chrome
+}
+
+function install_docker() {
+  step "${FUNCNAME[0]}"
+  sudo pacman -S --noconfirm docker docker-compose
+
+  sudo systemctl enable docker
+  sudo systemctl start docker
+  sudo usermod -aG docker "$USER"
+  if systemctl is-active --quiet docker; then
+    newgrp docker
+  fi
 }
 
 function arguments_handler() {
@@ -372,7 +390,6 @@ function arguments_handler() {
   fi
 
   if [[ "${ARGS[*]}" =~ -v ]]; then
-    remove_el_from_args -v
     set -x
   fi
 
@@ -391,28 +408,26 @@ function arguments_handler() {
     remove_el_from_args --install-arch-uefi
     install_arch_uefi "${ARGS[@]}"
   else
-    if [[ "${ARGS[*]}" =~ --yay ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
-      remove_el_from_args --yay
+    if [[ "${ARGS[*]}" =~ --yay ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
       install_yay
     fi
-    if [[ "${ARGS[*]}" =~ --ssh ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
-      remove_el_from_args --ssh
-      install_ssh
-    fi
-    if [[ "${ARGS[*]}" =~ --gnome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
-      remove_el_from_args --gnome
+    if [[ "${ARGS[*]}" =~ --gnome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
       install_gnome
-      if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
+      if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
         install_gnome_chrome_integration
       fi
     fi
     if [[ "${ARGS[*]}" =~ --dynamic-wallpaper ]]; then
-      remove_el_from_args --dynamic-wallpaper
       install_dynamic_wallpaper
     fi
-    if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --all-packages ]]; then
-      remove_el_from_args --chrome
+    if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
       install_chrome
+    fi
+    if [[ "${ARGS[*]}" =~ --ssh ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_ssh
+    fi
+    if [[ "${ARGS[*]}" =~ --docker ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_docker
     fi
   fi
 }
