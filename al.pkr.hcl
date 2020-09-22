@@ -28,7 +28,7 @@ source "virtualbox-iso" "arch-linux" {
   boot_command = [
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al.sh<enter>",
     "chmod +x ./al.sh<enter>",
-    "./al.sh --install-arch-uefi -v --log --dev-packages<enter><wait5>",
+    "./al.sh --install-arch-uefi -v --log --app-packages --dev-packages<enter><wait5>",
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/srv/enable-ssh.sh<enter>",
     "/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
   ]

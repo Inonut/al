@@ -32,6 +32,7 @@ options:
     --gnome               Install gnome as user interface
     --dynamic-wallpaper   Install variety to change wallpaper
     --chrome              Install Google Chrome
+    --virtualbox          Install Virtualbox
 
 '
 
@@ -373,6 +374,13 @@ function install_docker() {
   fi
 }
 
+function install_virtualbox() {
+  step "${FUNCNAME[0]}"
+  sudo pacman -S --noconfirm virtualbox virtualbox-host-modules-arch virtualbox-guest-iso
+
+  sudo vboxreload
+}
+
 function arguments_handler() {
   local ARGS=("$@")
 
@@ -428,6 +436,9 @@ function arguments_handler() {
     fi
     if [[ "${ARGS[*]}" =~ --docker ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
       install_docker
+    fi
+    if [[ "${ARGS[*]}" =~ --virtualbox ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_virtualbox
     fi
   fi
 }
