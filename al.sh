@@ -37,6 +37,11 @@ options:
     --dynamic-wallpaper   Install variety to change wallpaper
     --chrome              Install Google Chrome
     --virtualbox          Install Virtualbox
+    --git                 Install Git
+    --vagrant             Install Vagrant
+    --packer              Install Packer
+    --maven               Install Maven
+    --gradle              Install Gradle
 
 '
 
@@ -396,6 +401,10 @@ function install_git() {
   git config --global user.email "$GIT_EMAIL"
 }
 
+function install_pack() {
+  sudo pacman -S --noconfirm "$1"
+}
+
 function arguments_handler() {
   local ARGS=("$@")
 
@@ -457,6 +466,18 @@ function arguments_handler() {
     fi
     if [[ "${ARGS[*]}" =~ --git ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
       install_git
+    fi
+    if [[ "${ARGS[*]}" =~ --vagrant ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_pack vagrant
+    fi
+    if [[ "${ARGS[*]}" =~ --packer ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_pack packer
+    fi
+    if [[ "${ARGS[*]}" =~ --maven ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_pack maven
+    fi
+    if [[ "${ARGS[*]}" =~ --gradle ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+      install_pack gradle
     fi
   fi
 }
