@@ -67,7 +67,7 @@ function read_variables() {
 
     for i in "${!VARIABLE_LIST[@]}"; do
       read -p "${VARIABLE_LIST[$i]}=" "${VARIABLE_LIST[$i]}" &>/dev/tty
-      echo "${VARIABLE_LIST[$i]}=${!VARIABLE_LIST[$i]}" >> al.conf
+      echo "${VARIABLE_LIST[$i]}=${!VARIABLE_LIST[$i]}" >>al.conf
     done
   else
     echo "Generate defaults"
@@ -78,7 +78,7 @@ function read_variables() {
 
 function generate_defaults() {
   step "${FUNCNAME[0]}"
-  echo "$DEFAULT_OPTIONS" > al.conf
+  echo "$DEFAULT_OPTIONS" >al.conf
   echo "File al.conf was created!"
 }
 
@@ -96,7 +96,7 @@ function last_partition_name() {
   local last_partition_tokens
 
   last_partition=$(fdisk "$DEVICE" -l | tail -1)
-  IFS=" " read -r -a last_partition_tokens <<< "$last_partition"
+  IFS=" " read -r -a last_partition_tokens <<<"$last_partition"
 
   echo "${last_partition_tokens[0]}"
 }
@@ -107,7 +107,7 @@ function last_partition_end_mb() {
   local last_partition_tokens
 
   last_partition=$(parted "$DEVICE" unit MB print | tail -2)
-  IFS=" " read -r -a last_partition_tokens <<< "$last_partition"
+  IFS=" " read -r -a last_partition_tokens <<<"$last_partition"
   if [[ "${last_partition_tokens[2]}" == *MB ]]; then
     echo "${last_partition_tokens[2]}"
   else
@@ -117,7 +117,7 @@ function last_partition_end_mb() {
 
 function install_arch_uefi() {
   step "${FUNCNAME[0]}"
-  local FEATURES=( "$@" )
+  local FEATURES=("$@")
   local SWAPFILE="/swapfile"
   local PARTITION_OPTIONS="defaults,noatime"
   local PARTITION_BOOT
@@ -177,7 +177,7 @@ function install_arch_uefi() {
   {
     echo "[multilib]"
     echo "Include = /etc/pacman.d/mirrorlist"
-  } >> /mnt/etc/pacman.conf
+  } >>/mnt/etc/pacman.conf
   arch-chroot /mnt pacman -Sy
 
   {
@@ -185,7 +185,7 @@ function install_arch_uefi() {
     echo "# swap"
     echo "$SWAPFILE none swap defaults 0 0"
     echo ""
-  } >> /mnt/etc/fstab
+  } >>/mnt/etc/fstab
 
   arch-chroot /mnt systemctl enable fstrim.timer
 
@@ -253,7 +253,7 @@ function install_gnome() {
   sudo systemctl enable gdm.service
   sudo systemctl start gdm.service
 
-  cat <<'EOT' >> gnome-dconf
+  cat <<'EOT' >>gnome-dconf
 #!/bin/bash
 
 gsettings set org.gnome.desktop.interface cursor-theme 'Breeze'
@@ -315,7 +315,7 @@ rm $0
 EOT
 
   mkdir -p ~/.config/autostart/
-  cat <<EOT >> ~/.config/autostart/gnome-dconf.desktop
+  cat <<EOT >>~/.config/autostart/gnome-dconf.desktop
 [Desktop Entry]
 Comment[en_US]=
 Comment=
@@ -342,7 +342,7 @@ EOT
     ./gnome-dconf
   fi
 
-  cat <<EOT >> ~/.bashrc
+  cat <<EOT >>~/.bashrc
 alias ll='ls -alF'
 PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
 EOT
@@ -356,9 +356,9 @@ function install_gnome_chrome_integration() {
 function install_dynamic_wallpaper() {
   step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm variety
-#  mkdir -p ~/.config/variety
-#  date +"%Y-%m-%d %H:%M:%S" > ~/.config/variety/.firstrun
-#  variety -n &
+  #  mkdir -p ~/.config/variety
+  #  date +"%Y-%m-%d %H:%M:%S" > ~/.config/variety/.firstrun
+  #  variety -n &
   echo 'Use interface to configure it!'
 }
 
@@ -408,75 +408,85 @@ function install_pack() {
 function arguments_handler() {
   local ARGS=("$@")
 
-  function remove_el_from_args() {
+  function args_remove_el() {
     for i in "${!ARGS[@]}"; do
-      if [[ "${ARGS[$i]}" = "$1" ]]; then
+      if [[ "${ARGS[$i]}" == "$1" ]]; then
         unset "ARGS[$i]"
       fi
     done
   }
 
-  if [[ "${ARGS[*]}" =~ --log ]]; then
-    remove_el_from_args --log
+  function args_contains_el() {
+    for i in "${ARGS[@]}"; do
+      if [ "$i" == "$1" ]; then
+        return 0 # emit no error
+      fi
+    done
+
+    return 1 # emit error
+  }
+
+  if args_contains_el --log; then
+    args_remove_el --log
     init_log
   fi
 
-  if [[ "${ARGS[*]}" =~ -v ]]; then
+  if args_contains_el -v; then
     set -x
   fi
 
-  if [[ "${ARGS[*]}" =~ -h ]] || [[ "${ARGS[*]}" =~ --help ]]; then
+  if args_contains_el -h || args_contains_el --help; then
     echo "$USAGE"
     exit 1
   fi
 
-  if [[ "${ARGS[*]}" =~ --generate-defaults ]]; then
-    echo "$DEFAULT_OPTIONS" > al.conf
+  if args_contains_el --generate-defaults; then
+    echo "$DEFAULT_OPTIONS" >al.conf
     echo "File al.conf was created!"
     exit 1
   fi
 
-  if [[ "${ARGS[*]}" =~ --install-arch-uefi ]]; then
-    remove_el_from_args --install-arch-uefi
+  if args_contains_el --install-arch-uefi; then
+    args_remove_el --install-arch-uefi
     install_arch_uefi "${ARGS[@]}"
   else
-    if [[ "${ARGS[*]}" =~ --yay ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
+    if args_contains_el --yay || args_contains_el --app-packages; then
       install_yay
     fi
-    if [[ "${ARGS[*]}" =~ --gnome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
+    if args_contains_el --gnome || args_contains_el --app-packages; then
       install_gnome
-      if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
+      if args_contains_el --chrome || args_contains_el --app-packages; then
         install_gnome_chrome_integration
       fi
     fi
-    if [[ "${ARGS[*]}" =~ --dynamic-wallpaper ]]; then
+    if args_contains_el --dynamic-wallpaper; then
       install_dynamic_wallpaper
     fi
-    if [[ "${ARGS[*]}" =~ --chrome ]] || [[ "${ARGS[*]}" =~ --app-packages ]]; then
+    if args_contains_el --chrome || args_contains_el --app-packages; then
       install_chrome
     fi
-    if [[ "${ARGS[*]}" =~ --ssh ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --ssh || args_contains_el --dev-packages; then
       install_ssh
     fi
-    if [[ "${ARGS[*]}" =~ --docker ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --docker || args_contains_el --dev-packages; then
       install_docker
     fi
-    if [[ "${ARGS[*]}" =~ --virtualbox ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --virtualbox || args_contains_el --dev-packages; then
       install_virtualbox
     fi
-    if [[ "${ARGS[*]}" =~ --git ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --git || args_contains_el --dev-packages; then
       install_git
     fi
-    if [[ "${ARGS[*]}" =~ --vagrant ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --vagrant || args_contains_el --dev-packages; then
       install_pack vagrant
     fi
-    if [[ "${ARGS[*]}" =~ --packer ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --packer || args_contains_el --dev-packages; then
       install_pack packer
     fi
-    if [[ "${ARGS[*]}" =~ --maven ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --maven || args_contains_el --dev-packages; then
       install_pack maven
     fi
-    if [[ "${ARGS[*]}" =~ --gradle ]] || [[ "${ARGS[*]}" =~ --dev-packages ]]; then
+    if args_contains_el --gradle || args_contains_el --dev-packages; then
       install_pack gradle
     fi
   fi
@@ -489,4 +499,4 @@ function main() {
 
 main "$@"
 
-exit 1
+exit 0
