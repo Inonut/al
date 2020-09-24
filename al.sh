@@ -43,6 +43,7 @@ options:
     --maven               Install Maven
     --gradle              Install Gradle
     --mailspring          Install Mailspring
+    --intellij            Install Intellij Ultimate edition
 
 '
 
@@ -381,6 +382,15 @@ function install_mailspring() {
   yay -S --noconfirm mailspring
 }
 
+function install_intellij() {
+  step "${FUNCNAME[0]}"
+  if ! pacman -Q | grep yay; then
+    install_yay
+  fi
+
+  yay -S --noconfirm intellij-idea-ultimate-edition
+}
+
 function install_docker() {
   step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm docker docker-compose
@@ -477,6 +487,9 @@ function arguments_handler() {
     fi
     if args_contains_el --mailspring || args_contains_el --app-packages; then
       install_mailspring
+    fi
+    if args_contains_el --intellij || args_contains_el --app-packages; then
+      install_intellij
     fi
     if args_contains_el --ssh || args_contains_el --dev-packages; then
       install_ssh
