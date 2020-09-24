@@ -42,6 +42,7 @@ options:
     --packer              Install Packer
     --maven               Install Maven
     --gradle              Install Gradle
+    --mailspring          Install Mailspring
 
 '
 
@@ -371,6 +372,15 @@ function install_chrome() {
   yay -S --noconfirm google-chrome
 }
 
+function install_mailspring() {
+  step "${FUNCNAME[0]}"
+  if ! pacman -Q | grep yay; then
+    install_yay
+  fi
+
+  yay -S --noconfirm mailspring
+}
+
 function install_docker() {
   step "${FUNCNAME[0]}"
   sudo pacman -S --noconfirm docker docker-compose
@@ -464,6 +474,9 @@ function arguments_handler() {
     fi
     if args_contains_el --chrome || args_contains_el --app-packages; then
       install_chrome
+    fi
+    if args_contains_el --mailspring || args_contains_el --app-packages; then
+      install_mailspring
     fi
     if args_contains_el --ssh || args_contains_el --dev-packages; then
       install_ssh
