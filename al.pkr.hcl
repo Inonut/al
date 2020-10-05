@@ -28,7 +28,7 @@ source "virtualbox-iso" "arch-linux" {
   boot_command = [
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al.sh<enter>",
     "chmod +x ./al.sh<enter>",
-    "yes | ./al.sh --log -v archlinux admin-user official-packages aur-packages<enter><wait5>"
+    "yes | ./al.sh --log -v --vm='(${local.ssh_username} ${local.ssh_password})' archlinux admin-user official-packages aur-packages pre-conf-packages<enter><wait5>"
   ]
 }
 
