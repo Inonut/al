@@ -28,9 +28,7 @@ source "virtualbox-iso" "arch-linux" {
   boot_command = [
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al.sh<enter>",
     "chmod +x ./al.sh<enter>",
-    "./al.sh --install-arch-uefi -v --log --app-packages --dev-packages<enter><wait5>",
-    "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/srv/enable-ssh.sh<enter>",
-    "/usr/bin/bash ./enable-ssh.sh ${local.ssh_username} ${local.ssh_password}<enter>",
+    "yes | ./al.sh --log -v archlinux admin-user official-packages aur-packages<enter><wait5>"
   ]
 }
 
@@ -38,7 +36,7 @@ build {
   sources = ["sources.virtualbox-iso.arch-linux"]
 
   provisioner "shell" {
-    inline = ["[[ -f /root/al.log ]] && cat /root/al.log"]
+    inline = ["sudo cat /var/log/al.log"]
   }
 
   post-processor "vagrant" {
