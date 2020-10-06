@@ -6,8 +6,14 @@ function asd() {
   asd3
 }
 
-function asd3() {
+function aa() {
   echo asd3
 }
 
-eval 'asd'
+if [[ "$(type -t load_given_variable)" == function ]]; then
+  load_given_variable
+else
+  echo 'aaa'
+fi
+
+echo "$SUDO_USER"
