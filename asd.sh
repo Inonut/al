@@ -10,10 +10,22 @@ function aa() {
   echo asd3
 }
 
-if [[ "$(type -t load_given_variable)" == function ]]; then
-  load_given_variable
-else
-  echo 'aaa'
-fi
 
-echo "$SUDO_USER"
+asd='
+
+    ads
+    asda
+
+
+    aaa
+
+
+'
+asa=(5 6 a)
+asdd=(5 6 a)
+asddd=(5 6 a)
+ccc="aaaa"
+cccc=true
+
+
+declare -p | pcregrep -M " cccc=((\(.*\))|(\"((\n|.)*?)\"))"

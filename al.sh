@@ -31,7 +31,7 @@ function collect_variables() {
     if ! arr_contains_el "$var" "${INITIAL_VARIABLES[@]}" && [[ "$var" != INITIAL_VARIABLES ]]; then
       VARIABLE="
         $VARIABLE
-        $(declare -p | grep -e " $var=")
+        $(declare -p | pcregrep -M " $var=((\(.*\))|(\"((\n|.)*?)\"))")
       "
     fi
   done
@@ -199,9 +199,8 @@ function install_user_vagrant() {
 
   # Vagrant-specific configuration
   useradd --password "${PASSWORD}" --comment 'Vagrant User' --create-home --user-group "${SSH_USERNAME}"
-  echo 'Defaults env_keep += "SSH_AUTH_SOCK"' >/etc/sudoers.d/10_"${SSH_USERNAME}"
   echo "${SSH_USERNAME} ALL=(ALL) NOPASSWD: ALL" >>/etc/sudoers.d/10_"${SSH_USERNAME}"
-  chmod 0440 /etc/sudoers.d/10_"${SSH_USERNAME}"
+  chmod +x /etc/sudoers.d/10_"${SSH_USERNAME}"
 
   systemctl enable sshd
   systemctl start sshd
@@ -447,6 +446,15 @@ function install_yay() {
 
 function run_in_order() {
 
+  function run() {
+    if args_contains_el "$1"; then
+      eval "$2"
+      if [[ "$3" == true ]]; then
+        exit 0
+      fi
+    fi
+  }
+
   function archlinux_prefix() {
     if args_contains_el archlinux; then
       echo "run_arch_chroot "
@@ -457,9 +465,9 @@ function run_in_order() {
 
   function archlinux_prefix_user() {
     if args_contains_el archlinux; then
-      echo "run_arch_chroot_user "
+      echo "run_arch_chroot_user ${ADMIN_USER[0]} "
     else
-      echo "run_user "
+      echo "run_user $SUDO_USER "
     fi
   }
 
@@ -508,15 +516,6 @@ function main() {
     fi
   }
 
-  function run() {
-    if args_contains_el "$1"; then
-      eval "$2"
-      if [[ "$3" == true ]]; then
-        exit 0
-      fi
-    fi
-  }
-
   function run_arch_chroot() {
     local RUN
     RUN=$(build_inline_script "$1")
@@ -528,12 +527,13 @@ function main() {
 
   function run_arch_chroot_user() {
     local RUN
-    RUN=$(build_inline_script "$1")
+    RUN=$(build_inline_script "$2")
     echo "$RUN" >/mnt/run_arch_chroot_user.sh
     chmod +x /mnt/run_arch_chroot_user.sh
-    sed -i "s/%wheel ALL=(ALL) ALL/%wheel ALL=(ALL) NOPASSWD: ALL/" /mnt/etc/sudoers
-    arch-chroot /mnt su "${ADMIN_USER[0]}" -c "sudo /run_arch_chroot_user.sh"
-    sed -i "s/%wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) ALL/" /mnt/etc/sudoers
+    echo "$1 ALL=(ALL) NOPASSWD: ALL" >/mnt/etc/sudoers.d/10_"$1"
+    chmod +x /mnt/etc/sudoers.d/10_"$1"
+    arch-chroot /mnt su "$1" -c "sudo /run_arch_chroot_user.sh"
+    rm -fr /mnt/etc/sudoers.d/10_"$1"
     rm -fr /mnt/run_arch_chroot_user.sh
   }
 
@@ -542,13 +542,16 @@ function main() {
     RUN=$(build_inline_script "$1")
     echo "$RUN" >/run_user.sh
     chmod +x /run_user.sh
-    sed -i "s/%wheel ALL=(ALL) ALL/%wheel ALL=(ALL) NOPASSWD: ALL/" /etc/sudoers
-    su "$SUDO_USER" -c "sudo /run_user.sh"
-    sed -i "s/%wheel ALL=(ALL) NOPASSWD: ALL/%wheel ALL=(ALL) ALL/" /etc/sudoers
+    echo "$1 ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/10_"$1"
+    chmod +x /etc/sudoers.d/10_"$1"
+    su "$1" -c "sudo /run_user.sh"
+    rm -fr /etc/sudoers.d/10_"$1"
     rm -fr /run_user.sh
   }
 
   function build_inline_script() {
+    local FN
+    IFS=' ' read -r -a FN <<<"$1"
     local VERBOSE
     if args_contains_el -v; then
       VERBOSE='set -x'
@@ -558,7 +561,7 @@ function main() {
       $(collect_variables)
       $(type args_contains_el | tail +2)
       $(type log | tail +2)
-      $(type "$1" | tail +2)
+      $(type "${FN[0]}" | tail +2)
       $1
     "
   }
