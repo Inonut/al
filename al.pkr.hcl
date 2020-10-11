@@ -16,7 +16,7 @@ source "virtualbox-iso" "arch-linux" {
     ["modifyvm", "{{.Name}}", "--cpus", "2"],
     ["modifyvm", "{{.Name}}", "--firmware", "efi"]
   ]
-  disk_size = 16384
+  disk_size = 25384
   hard_drive_interface = "sata"
   iso_url = "https://mirror.rackspace.com/archlinux/iso/${local.arch_version}.01/archlinux-${local.arch_version}.01-x86_64.iso"
   iso_checksum = "file:https://mirrors.kernel.org/archlinux/iso/${local.arch_version}.01/sha1sums.txt"
@@ -28,7 +28,7 @@ source "virtualbox-iso" "arch-linux" {
   boot_command = [
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al.sh<enter>",
     "chmod +x ./al.sh<enter>",
-    "yes | ./al.sh --log -v --vm='(${local.ssh_username} ${local.ssh_password})' archlinux admin-user official-packages aur-packages pre-conf-packages<enter><wait5>",
+    "yes | ./al.sh --log -v --vm='(${local.ssh_username} ${local.ssh_password})' archlinux admin-user all<enter><wait5>",
   ]
 }
 

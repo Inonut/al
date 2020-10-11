@@ -94,6 +94,9 @@ function show_help() {
             * | admin-user[='$(print_array "${ADMIN_USER[@]}")']               | Add admin user; format: '(user pass)'
             * | official-packages[='$(print_array "${OFFICIAL_PACKAGES[@]}")'] | Install official Arch Linux packages with pacman
             * | aur-packages[='$(print_array "${AUR_PACKAGES[@]}")']           | Install aur Arch Linux packages with yay
+            * | all                                                            | Install: gnome, official-packages, aur-packages
+            * | gnome                                                          | Install and configure Gnome
+            * | systemd-hooks                                                  | Configure system with systemd profile; Add some aliases in .bashrc
   "
 }
 
@@ -147,7 +150,7 @@ function manage_variable() {
     ALONGSIDE=false
     BOOT_MOUNT="/boot/efi"
     SWAPFILE="/swapfile"
-    SWAP_SIZE="8192"
+    SWAP_SIZE="4192"
     REFLECTOR_COUNTRIES=(Romania)
     ROOT_PASSWORD="archlinux"
     TIMEZONE="/usr/share/zoneinfo/Europe/Bucharest"
@@ -190,7 +193,7 @@ function manage_variable() {
 function install_user_vagrant() {
   log "${FUNCNAME[0]}"
 
-  pacman -Sy --noconfirm openssh
+  pacman -Sy --noconfirm --needed openssh
 
   local SSH_USERNAME="${VAGRANT_USER[0]}"
   local SSH_PASSWORD="${VAGRANT_USER[1]}"
@@ -340,7 +343,7 @@ function install_arch_linux() {
       for COUNTRY in "${REFLECTOR_COUNTRIES[@]}"; do
         COUNTRIES+=(--country "${COUNTRY}")
       done
-      pacman -Sy --noconfirm reflector
+      pacman -Sy --noconfirm --needed reflector
       reflector "${COUNTRIES[@]}" --latest 25 --age 24 --protocol https --completion-percent 100 --sort rate --save /etc/pacman.d/mirrorlist
     fi
 
@@ -388,10 +391,10 @@ function install_arch_linux() {
       systemctl enable fstrim.timer
     fi
 
-    pacman -Sy --noconfirm networkmanager
+    pacman -Sy --noconfirm --needed networkmanager
     systemctl enable NetworkManager.service
 
-    pacman -Sy --noconfirm efibootmgr grub
+    pacman -Sy --noconfirm --needed efibootmgr grub
     sed -i 's/GRUB_DEFAULT=0/GRUB_DEFAULT=saved/' /etc/default/grub
     sed -i "s/#GRUB_SAVEDEFAULT=\"true\"/GRUB_SAVEDEFAULT=\"true\"/" /etc/default/grub
     grub-install --target=x86_64-efi --bootloader-id=grub --efi-directory="$BOOT_MOUNT" --recheck
@@ -419,40 +422,190 @@ function add_admin_user() {
 function install_official_packages() {
   log "${FUNCNAME[0]}"
 
-  pacman -Sy --noconfirm "${OFFICIAL_PACKAGES[@]}"
+  pacman -Sy --noconfirm --needed "${OFFICIAL_PACKAGES[@]}"
 }
 
 function install_aur_packages() {
   log "${FUNCNAME[0]}"
 
   su "$SUDO_USER" -c "
-    yay -Sy --noconfirm ${AUR_PACKAGES[*]}
+    yay -Sy --noconfirm --needed ${AUR_PACKAGES[*]}
   "
 }
 
 function install_yay() {
   log "${FUNCNAME[0]}"
 
-  pacman -Sy --noconfirm git
+  if ! pacman -Q | grep -q yay; then
+    pacman -Sy --noconfirm --needed git
+    su "$SUDO_USER" -c "
+      cd ~
+      git clone https://aur.archlinux.org/yay.git
+      cd yay
+      makepkg -si --noconfirm --needed
+      cd ..
+      rm -rf yay
+    "
+  fi
+}
+
+function configure_systemd_hooks() {
+  log "${FUNCNAME[0]}"
+
+  cat <<EOT >>/etc/bash.bashrc
+alias ll='ls -alF'
+PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
+EOT
+
+  local USERS_HOME
+  local USER_HOME
+  USERS_HOME=$(cat /etc/passwd | grep bash | awk -v FS=':' '{print $6}' | tr '\n' ' ')
+  IFS=' ' read -r -a USERS_HOME <<<"$USERS_HOME"
+  for USER_HOME in "${USERS_HOME[@]}"; do
+    if test -f "$USER_HOME/.bashrc"; then
+      sed -i 's/PS1=/#PS1=/g' "$USER_HOME/.bashrc"
+    fi
+  done
+}
+
+function install_gnome() {
+  log "${FUNCNAME[0]}"
+
   su "$SUDO_USER" -c "
-    cd ~
-    git clone https://aur.archlinux.org/yay.git
-    cd yay
-    makepkg -si --noconfirm
-    cd ..
-    rm -rf yay
+    yay -S --noconfirm --needed gnome gnome-extra matcha-gtk-theme bash-completion xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus
+    yay -Rs --noconfirm --needed gnome-terminal
+    yay -S --noconfirm --needed gnome-terminal-transparency
   "
+  systemctl enable gdm.service
+  if ! systemctl is-active --quiet gdm; then
+    systemctl start gdm.service
+  fi
+
+  mkdir -p /etc/dconf/profile
+  cat <<'EOT' >/etc/dconf/profile/user
+user-db:user
+system-db:site
+EOT
+
+  mkdir -p /etc/dconf/db/site.d
+  cat <<'EOT' >/etc/dconf/db/site.d/00_site_settings
+[org/gnome/GWeather]
+temperature-unit='centigrade'
+
+[org/gnome/Weather]
+automatic-location=true
+
+[org/gnome/control-center]
+last-panel='keyboard'
+
+[org/gnome/desktop/interface]
+cursor-theme='Breeze'
+document-font-name='Sans 11'
+enable-animations=true
+font-name='Noto Sans 11'
+gtk-im-module='gtk-im-context-simple'
+gtk-theme='Matcha-azul'
+icon-theme='Papirus-Dark-Maia'
+monospace-font-name='Hack 10'
+
+[org/gnome/desktop/peripherals/keyboard]
+numlock-state=true
+
+[org/gnome/desktop/wm/keybindings]
+show-desktop=['<Super>d']
+switch-applications=@as []
+switch-applications-backward=@as []
+switch-windows=['<Alt>Tab']
+switch-windows-backward=['<Shift><Alt>Tab']
+
+[org/gnome/desktop/wm/preferences]
+button-layout='appmenu:minimize,maximize,close'
+
+[org/gnome/gedit/preferences/editor]
+scheme='solarized-dark'
+use-default-font=true
+wrap-last-split-mode='word'
+
+[org/gnome/nautilus/icon-view]
+default-zoom-level='small'
+
+[org/gnome/settings-daemon/plugins/media-keys]
+custom-keybindings=['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']
+home=['<Super>e']
+www=['<Super>g']
+
+[org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0]
+binding='<Primary><Alt>t'
+command='gnome-terminal'
+name='terminal'
+
+[org/gnome/shell]
+disable-user-extensions=false
+disabled-extensions=@as []
+enabled-extensions=['TopIcons@phocean.net']
+
+[org/gnome/shell/extensions/user-theme]
+name='Matcha-dark-sea'
+
+[org/gnome/shell/weather]
+automatic-location=true
+
+[org/gnome/shell/world-clocks]
+locations=@av []
+
+[org/gnome/system/location]
+enabled=true
+
+[org/gnome/terminal/legacy/profiles:]
+default='c07cafa6-2725-4bc3-bc30-fda45a6eae8f'
+list=['b1dcc9dd-5262-4d8d-a863-c897e6d979b9', 'c07cafa6-2725-4bc3-bc30-fda45a6eae8f']
+
+[org/gnome/terminal/legacy/profiles:/:c07cafa6-2725-4bc3-bc30-fda45a6eae8f]
+background-color='#2E3440'
+background-transparency-percent=9
+bold-color='#D8DEE9'
+bold-color-same-as-fg=true
+cursor-background-color='rgb(216,222,233)'
+cursor-colors-set=true
+cursor-foreground-color='rgb(59,66,82)'
+default-size-columns=100
+default-size-rows=27
+foreground-color='#D8DEE9'
+highlight-background-color='rgb(136,192,208)'
+highlight-colors-set=true
+highlight-foreground-color='rgb(46,52,64)'
+nord-gnome-terminal-version='0.1.0'
+palette=['#3B4252', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#88C0D0', '#E5E9F0', '#4C566A', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#8FBCBB', '#ECEFF4']
+scrollbar-policy='never'
+use-theme-background=false
+use-theme-colors=false
+use-theme-transparency=false
+use-transparent-background=true
+visible-name='Nord'
+
+EOT
+
+  if systemctl is-active --quiet dbus; then
+    dconf update
+  fi
+
 }
 
 function run_in_order() {
 
   function run() {
-    if args_contains_el "$1"; then
-      eval "$2"
-      if [[ "$3" == true ]]; then
-        exit 0
+    local ELEMENTS
+    local EL
+    IFS=' ' read -r -a ELEMENTS <<<"$1"
+    for EL in "${ELEMENTS[@]}"; do
+      if args_contains_el "$EL"; then
+        eval "$2"
+        if [[ "$3" == true ]]; then
+          exit 0
+        fi
+        break
       fi
-    fi
+    done
   }
 
   function archlinux_prefix() {
@@ -481,9 +634,11 @@ function run_in_order() {
 
   run archlinux install_arch_linux
   run admin-user "$(archlinux_prefix) add_admin_user"
-  run official-packages "$(archlinux_prefix) install_official_packages"
-  run aur-packages "$(archlinux_prefix_user) install_yay"
-  run aur-packages "$(archlinux_prefix_user) install_aur_packages"
+  run "all official-packages" "$(archlinux_prefix) install_official_packages"
+  run "all aur-packages gnome" "$(archlinux_prefix_user) install_yay"
+  run "all aur-packages" "$(archlinux_prefix_user) install_aur_packages"
+  run "all systemd-hooks" "$(archlinux_prefix) configure_systemd_hooks"
+  run "all gnome" "$(archlinux_prefix_user) install_gnome"
 
   run --vm "$(archlinux_prefix) install_user_vagrant"
   if args_contains_el --log && args_contains_el archlinux; then
@@ -539,7 +694,7 @@ function main() {
 
   function run_user() {
     local RUN
-    RUN=$(build_inline_script "$1")
+    RUN=$(build_inline_script "$2")
     echo "$RUN" >/run_user.sh
     chmod +x /run_user.sh
     echo "$1 ALL=(ALL) NOPASSWD: ALL" >/etc/sudoers.d/10_"$1"
