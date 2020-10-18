@@ -65,48 +65,21 @@ function save_function() {
 
 function last_partition_name() {
   local DEVICE="$1"
-  local last_partition
-  local last_partition_tokens
-
-  last_partition=$(fdisk "$DEVICE" -l | tail -1)
-  IFS=" " read -r -a last_partition_tokens <<<"$last_partition"
-
-  echo "${last_partition_tokens[0]}"
+  fdisk "$DEVICE" -l | awk 'END {print $1}'
 }
 
 function last_partition_end_mb() {
   local DEVICE="$1"
-  local last_partition
-  local last_partition_tokens
-
-  last_partition=$(parted "$DEVICE" unit MB print | tail -2)
-  IFS=" " read -r -a last_partition_tokens <<<"$last_partition"
-  if [[ "${last_partition_tokens[2]}" == *MB ]]; then
-    echo "${last_partition_tokens[2]}"
-  else
-    echo "0%"
-  fi
+  parted "$DEVICE" print | awk '{if($1 ~ /[0-9]/) a=$3} {if(a == "") a="0%"} END {print a}'
 }
 
 function last_partition_end_number_parted() {
   local DEVICE="$1"
-  local LAST_PARTITION_NUMBER
-  LAST_PARTITION_NUMBER=$(parted /dev/nvme0n1 print | awk '{if($1!="") a=$1} END {print a}')
-  if [[ "$LAST_PARTITION_NUMBER" == '' ]]; then
-    LAST_PARTITION_NUMBER='1'
-  fi
-
-  echo "$LAST_PARTITION_NUMBER"
+  parted "$DEVICE" print | awk '{if($1 ~ /[0-9]/) a=$1} {if(a == "") a="1"} END {print a}'
 }
 
 function add_mb() {
-  local a
-  local b
-  local c
-  a=$(echo "$1" | awk -v FS='MB' '{print $1}')
-  b=$(echo "$2" | awk -v FS='MB' '{print $1}')
-  c=$(echo "$a + $b" | bs)
-  echo "${c}MB"
+  echo "$1 $2" | awk -F'MB' '{print $1+$2 "MB"}'
 }
 
 function build_inline_script() {
@@ -185,7 +158,7 @@ function arch_linux_wipe_partition() {
 function arch_linux_create_next_partition() {
   local DEVICE="$1"
   local SIZE="$2"
-  : "${SIZE:='100%'}"
+  : "${SIZE:=100%}"
   local LAST_MB
   local NEXT_SIZE
 
@@ -201,86 +174,74 @@ function arch_linux_create_next_partition() {
   last_partition_name "$DEVICE"
 }
 
+function arch_linux_format_partition() {
+  local PARTITION="$1"
+  local LABEL="$2"
+  if [[ "$LABEL" == "" ]]; then
+    mkfs.ext4 "$PARTITION"
+  else
+    mkfs.ext4 -L "$LABEL" "$PARTITION"
+  fi
+}
+
+function arch_linux_mount_partition() {
+  local PARTITION="$1"
+  local MOUNT_POINT="$2"
+  local MOUNT_OPTIONS="$3"
+  : "${MOUNT_OPTIONS:=defaults,noatime}"
+
+  mkdir -p /mnt"$MOUNT_POINT"
+  mount -o "$MOUNT_OPTIONS" "$PARTITION" /mnt"$MOUNT_POINT"
+}
+
 function arch_linux_create_boot_partition() {
   local DEVICE="$1"
- # arch_linux_create_next_partition "$DEVICE" "512MB"
+  local PARTITION_NAME
+  local PARTITION_NUMBER
+  PARTITION_NAME=$(arch_linux_create_next_partition "$DEVICE" "512MB")
+  PARTITION_NUMBER=$(last_partition_end_number_parted "$DEVICE")
 
-
-
-  local SIZE
-  local LAST_MB
-  local NEXT_SIZE
-  local PARTITION_BOOT
-  SIZE="512MB"
-
-  LAST_MB=$(last_partition_end_mb "$DEVICE")
-  if [[ "$LAST_MB" == 0% ]]; then
-    NEXT_SIZE="$SIZE"
-  else
-    NEXT_SIZE=$(add_mb "$LAST_MB" "$SIZE")
-  fi
-  parted "$DEVICE" mkpart primary "$LAST_MB" "$NEXT_SIZE" >&2
-  parted "$DEVICE" set 1 boot on >&2
+  parted "$DEVICE" set "$PARTITION_NUMBER" boot on >&2
   if [ -d /sys/firmware/efi ]; then
-    parted "$DEVICE" set 1 esp on >&2
+    parted "$DEVICE" set "$PARTITION_NUMBER" esp on >&2
   fi
-  PARTITION_BOOT=$(last_partition_name "$DEVICE")
 
-  echo "$PARTITION_BOOT"
+  echo "$PARTITION_NAME"
 }
 
 function arch_linux_create_root_partition() {
   local DEVICE="$1"
-  local LAST_MB
-  local PARTITION_BOOT
-
-  LAST_MB=$(last_partition_end_mb "$DEVICE")
-  parted "$DEVICE" mkpart primary "$LAST_MB" 100% >&2
-  PARTITION_ROOT=$(last_partition_name "$DEVICE")
-
-  echo "$PARTITION_ROOT"
+  arch_linux_create_next_partition "$DEVICE"
 }
 
 function arch_linux_format_boot_partition() {
   local PARTITION_BOOT="$1"
   if [ -d /sys/firmware/efi ]; then
-    mkfs.fat -n ESP -F32 "$PARTITION_BOOT"
+    mkfs.fat -n "boot" -F32 "$PARTITION_BOOT"
   else
-    mkfs.ext4 -L boot "$PARTITION_BOOT"
+    arch_linux_format_partition "$PARTITION_BOOT" "boot"
   fi
 }
 
 function arch_linux_format_root_partition() {
-  local PARTITION_ROOT="$1"
-  mkfs.ext4 -L root "$PARTITION_ROOT"
-}
-
-function arch_linux_mount_boot_partition() {
-  local PARTITION_BOOT="$1"
-  local BOOT_MOUNT="$2"
-
-  mkdir -p /mnt"$BOOT_MOUNT"
-  mount -o "defaults,noatime" "$PARTITION_BOOT" /mnt"$BOOT_MOUNT"
-}
-
-function arch_linux_mount_root_partition() {
-  local PARTITION_ROOT="$1"
-
-  mount -o "defaults,noatime" "$PARTITION_ROOT" /mnt
+  arch_linux_format_partition "$1" "root"
 }
 
 function arch_linux_install() {
   pacstrap /mnt base base-devel linux linux-headers linux-firmware
 
-  genfstab -U /mnt >>/etc/fstab
+  genfstab -U /mnt >>/mnt/etc/fstab
 }
 
 function arch_linux_general_configuration() {
+  local DEVICE="$1"
+
   local LOCALE="en_US.UTF-8 UTF-8"
   sed -i "s/#$LOCALE/$LOCALE/" /etc/locale.gen
   locale-gen
   echo -e "LANG=en_US.UTF-8" >>/etc/locale.conf
   echo -e "KEYMAP=us" >/etc/vconsole.conf
+  echo "archlinux" >/etc/hostname
 
   {
     echo "[multilib]"
@@ -295,10 +256,7 @@ function arch_linux_general_configuration() {
 alias ll='ls -alF'
 PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
 EOT
-}
 
-function enable_trim_if_support() {
-  local DEVICE="$1"
   if ! lsblk "$DEVICE" --discard | grep -q 0B; then
     systemctl enable fstrim.timer
   fi
@@ -341,8 +299,13 @@ function configure_timezone() {
 }
 
 function configure_grub() {
-  local BOOT_MOUNT="$1"
-  local DEVICE="$2"
+  local DEVICE="$1"
+  local BOOT_MOUNT="$2"
+
+  if [[ "$BOOT_MOUNT" == "" ]]; then
+    BOOT_MOUNT=$(findmnt -s | awk '{if($0 ~ /boot/) print $1}')
+  fi
+
   install_official_packages grub
   sed -i 's/GRUB_DEFAULT=0/GRUB_DEFAULT=saved/' /etc/default/grub
   sed -i "s/#GRUB_SAVEDEFAULT=\"true\"/GRUB_SAVEDEFAULT=\"true\"/" /etc/default/grub
@@ -352,6 +315,23 @@ function configure_grub() {
   else
     grub-install --target=i386-pc --recheck "$DEVICE"
   fi
+
+  local SWAP
+  SWAP=$(findmnt -s | awk '{if($0 ~ /swap/) print $2}')
+  if [[ "$SWAP" != '' ]]; then
+    eval "local $(< /etc/default/grub grep GRUB_CMDLINE_LINUX_DEFAULT)"
+    if [[ "$SWAP" == UUID=* ]]; then
+      GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT resume=${SWAP#UUID=}"
+    else
+      local SWAP_DEVICE
+      local SWAP_FILE_OFFSET
+      SWAP_DEVICE=$(findmnt -no UUID -T "$SWAP")
+      SWAP_FILE_OFFSET=$(filefrag -v "$SWAP" | awk '{ if($1=="0:"){print $4} }' | tr -d '.')
+      GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT resume=$SWAP_DEVICE resume_offset=$SWAP_FILE_OFFSET"
+    fi
+    sed -i -E "s/GRUB_CMDLINE_LINUX_DEFAULT=.*$/GRUB_CMDLINE_LINUX_DEFAULT=\"$GRUB_CMDLINE_LINUX_DEFAULT\"/g" /etc/default/grub
+  fi
+
   grub-mkconfig -o "/boot/grub/grub.cfg"
   if lspci | grep -q -i virtualbox; then
     echo -n "\EFI\grub\grubx64.efi" >"$BOOT_MOUNT/startup.nsh"
@@ -469,7 +449,7 @@ function install_yay_dep_user() {
 }
 
 function install_gnome_dep_user() {
-  install_aur_packages gnome gnome-extra matcha-gtk-theme xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus
+  install_aur_packages gnome gnome-extra matcha-gtk-theme xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus chrome-gnome-shell
   uninstall_aur_packages gnome-terminal
   install_aur_packages gnome-terminal-transparency
 }
@@ -546,6 +526,15 @@ enabled-extensions=['TopIcons@phocean.net']
 [org/gnome/shell/extensions/user-theme]
 name='Matcha-dark-sea'
 
+[org/gnome/shell/extensions/topicons]
+icon-brightness=2.7755575615628914e-17
+icon-contrast=2.7755575615628914e-17
+icon-opacity=230
+icon-saturation=0.40000000000000002
+icon-size=15
+tray-order=2
+tray-pos='right'
+
 [org/gnome/shell/weather]
 automatic-location=true
 
@@ -560,6 +549,7 @@ default='c07cafa6-2725-4bc3-bc30-fda45a6eae8f'
 list=['b1dcc9dd-5262-4d8d-a863-c897e6d979b9', 'c07cafa6-2725-4bc3-bc30-fda45a6eae8f']
 
 [org/gnome/terminal/legacy/profiles:/:c07cafa6-2725-4bc3-bc30-fda45a6eae8f]
+audible-bell=false
 background-color='#2E3440'
 background-transparency-percent=9
 bold-color='#D8DEE9'
@@ -569,6 +559,7 @@ cursor-colors-set=true
 cursor-foreground-color='rgb(59,66,82)'
 default-size-columns=100
 default-size-rows=27
+font='Hack Regular 11'
 foreground-color='#D8DEE9'
 highlight-background-color='rgb(136,192,208)'
 highlight-colors-set=true
@@ -576,6 +567,7 @@ highlight-foreground-color='rgb(46,52,64)'
 nord-gnome-terminal-version='0.1.0'
 palette=['#3B4252', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#88C0D0', '#E5E9F0', '#4C566A', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#8FBCBB', '#ECEFF4']
 scrollbar-policy='never'
+use-system-font=false
 use-theme-background=false
 use-theme-colors=false
 use-theme-transparency=false
@@ -584,23 +576,11 @@ visible-name='Nord'
 
 EOT
 
+  sed -i 's/#WaylandEnable=/WaylandEnable=/' /etc/gdm/custom.conf
+
   if systemctl is-active --quiet dbus; then
     dconf update
   fi
-}
-
-function configure_hibernation_on_swap_file() {
-  local SWAPFILE="$1"
-  : "${SWAPFILE:=/swapfile}"
-  local SWAP_DEVICE
-  local SWAP_FILE_OFFSET
-
-  SWAP_DEVICE=$(findmnt -no UUID -T "$SWAPFILE")
-  SWAP_FILE_OFFSET=$(filefrag -v "$SWAPFILE" | awk '{ if($1=="0:"){print $4} }' | tr -d '.')
-  eval "local $(< /etc/default/grub grep GRUB_CMDLINE_LINUX_DEFAULT)"
-  GRUB_CMDLINE_LINUX_DEFAULT="$GRUB_CMDLINE_LINUX_DEFAULT resume=$SWAP_DEVICE resume_offset=$SWAP_FILE_OFFSET"
-  sed -i -E "s/GRUB_CMDLINE_LINUX_DEFAULT=.*$/GRUB_CMDLINE_LINUX_DEFAULT=\"$GRUB_CMDLINE_LINUX_DEFAULT\"/g" /etc/default/grub
-  grub-mkconfig -o /boot/grub/grub.cfg
 }
 
 checkpoint_variables

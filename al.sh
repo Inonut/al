@@ -14,7 +14,7 @@ ROOT_PASSWORD="archlinux"
 ADMIN_NAME="admin"
 ADMIN_PASS="admin"
 TIMEZONE="/usr/share/zoneinfo/Europe/Bucharest"
-PACKAGES=(nano zip unzip wget bash-completion)
+PACKAGES=(nano zip unzip wget bash-completion openssh google-chrome )
 
 
 init_log /var/log/al.log
@@ -32,28 +32,26 @@ PARTITION_BOOT=$(arch_linux_create_boot_partition "$DEVICE")
 PARTITION_ROOT=$(arch_linux_create_root_partition "$DEVICE")
 arch_linux_format_boot_partition "$PARTITION_BOOT"
 arch_linux_format_root_partition "$PARTITION_ROOT"
-arch_linux_mount_root_partition "$PARTITION_ROOT"
-arch_linux_mount_boot_partition "$PARTITION_BOOT" "$BOOT_MOUNT"
+arch_linux_mount_partition "$PARTITION_ROOT"
+arch_linux_mount_partition "$PARTITION_BOOT" "$BOOT_MOUNT"
 
 refactor_mirror_list "${REFLECTOR_COUNTRIES[@]}"
 arch_linux_install
 
 function arch_linux_configuration() {
-  arch_linux_general_configuration
+  arch_linux_general_configuration "$DEVICE"
   refactor_mirror_list "${REFLECTOR_COUNTRIES[@]}"
+  configure_admin_user "$ADMIN_NAME" "$ADMIN_PASS"
   configure_network
   configure_timezone "$TIMEZONE"
-  configure_grub "$BOOT_MOUNT" "$DEVICE"
-  configure_swap_file "$SWAP_SIZE"
-  configure_hibernation_on_swap_file
-  enable_trim_if_support "$DEVICE"
   root_password "$ROOT_PASSWORD"
-  configure_admin_user "$ADMIN_NAME" "$ADMIN_PASS"
+  configure_swap_file "$SWAP_SIZE"
+  configure_grub "$DEVICE"
 
   configure_needed_for_running_in_vm
 
   user_chroot_hook install_yay "$ADMIN_NAME"
-  user_chroot "install_aur_packages ${PACKAGES[*]}" "$ADMIN_NAME"
+  user_chroot_hook "install_aur_packages ${PACKAGES[*]}" "$ADMIN_NAME"
   user_chroot_hook install_gnome "$ADMIN_NAME"
 }
 

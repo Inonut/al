@@ -3,3 +3,4 @@ output_box
 output-arch*
 packer_cache
 .vagrant
+*.log
