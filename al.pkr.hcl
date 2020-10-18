@@ -27,8 +27,9 @@ source "virtualbox-iso" "arch-linux" {
   shutdown_command = "sudo systemctl poweroff"
   boot_command = [
     "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al.sh<enter>",
+    "/usr/bin/curl -O http://{{ .HTTPIP }}:{{ .HTTPPort }}/al_lib.sh<enter>",
     "chmod +x ./al.sh<enter>",
-    "yes | ./al.sh --log -v --vm='(${local.ssh_username} ${local.ssh_password})' archlinux admin-user all<enter><wait5>",
+    "./al.sh<enter><wait5>",
   ]
 }
 
