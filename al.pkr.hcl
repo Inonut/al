@@ -11,9 +11,9 @@ source "virtualbox-iso" "arch-linux" {
   headless = true
   http_directory = "."
   vboxmanage = [
-    ["modifyvm", "{{.Name}}", "--memory", "2048"],
+    ["modifyvm", "{{.Name}}", "--memory", "4048"],
     ["modifyvm", "{{.Name}}", "--vram", "128"],
-    ["modifyvm", "{{.Name}}", "--cpus", "2"],
+    ["modifyvm", "{{.Name}}", "--cpus", "4"],
     ["modifyvm", "{{.Name}}", "--firmware", "efi"]
   ]
   disk_size = 25384

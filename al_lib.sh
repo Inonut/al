@@ -236,13 +236,6 @@ function arch_linux_install() {
 function arch_linux_general_configuration() {
   local DEVICE="$1"
 
-  local LOCALE="en_US.UTF-8 UTF-8"
-  sed -i "s/#$LOCALE/$LOCALE/" /etc/locale.gen
-  locale-gen
-  echo -e "LANG=en_US.UTF-8" >>/etc/locale.conf
-  echo -e "KEYMAP=us" >/etc/vconsole.conf
-  echo "archlinux" >/etc/hostname
-
   {
     echo "[multilib]"
     echo "Include = /etc/pacman.d/mirrorlist"
@@ -254,12 +247,38 @@ function arch_linux_general_configuration() {
 
   cat <<EOT >>/etc/bash.bashrc
 alias ll='ls -alF'
+alias grep='grep --colour=auto'
+alias egrep='egrep --colour=auto'
+alias fgrep='fgrep --colour=auto'
 PS1='\[\033[01;32m\][\u@\h\[\033[01;37m\] \W\[\033[01;32m\]]\$\[\033[00m\] '
 EOT
 
-  if ! lsblk "$DEVICE" --discard | grep -q 0B; then
+  if [[ "$DEVICE" != "" ]] && ! lsblk "$DEVICE" --discard | grep -q 0B; then
     systemctl enable fstrim.timer
   fi
+}
+
+function configure_locale() {
+  local USER_LOCALE="$1"
+  sed -i "s/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/" /etc/locale.gen
+  sed -i "s/#$USER_LOCALE.UTF-8 UTF-8/$USER_LOCALE.UTF-8 UTF-8/" /etc/locale.gen
+
+  locale-gen
+
+  {
+    echo "LANG=en_US.UTF-8"
+    echo "LC_ADDRESS=$USER_LOCALE.UTF-8"
+    echo "LC_IDENTIFICATION=$USER_LOCALE.UTF-8"
+    echo "LC_MEASUREMENT=$USER_LOCALE.UTF-8"
+    echo "LC_MONETARY=$USER_LOCALE.UTF-8"
+    echo "LC_NAME=$USER_LOCALE.UTF-8"
+    echo "LC_NUMERIC=$USER_LOCALE.UTF-8"
+    echo "LC_PAPER=$USER_LOCALE.UTF-8"
+    echo "LC_TELEPHONE=$USER_LOCALE.UTF-8"
+    echo "LC_TIME=$USER_LOCALE.UTF-8"
+  }>>/etc/locale.conf
+  echo -e "KEYMAP=us" >/etc/vconsole.conf
+  echo "archlinux" >/etc/hostname
 }
 
 function configure_swap_file() {
@@ -449,7 +468,7 @@ function install_yay_dep_user() {
 }
 
 function install_gnome_dep_user() {
-  install_aur_packages gnome gnome-extra matcha-gtk-theme xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-hack gnome-shell-extensions gnome-shell-extension-topicons-plus chrome-gnome-shell
+  install_aur_packages gnome gnome-extra matcha-gtk-theme xcursor-breeze papirus-maia-icon-theme-git noto-fonts ttf-liberation gnome-shell-extensions gnome-shell-extension-topicons-plus chrome-gnome-shell evolution-ews evolution-on
   uninstall_aur_packages gnome-terminal
   install_aur_packages gnome-terminal-transparency
 }
@@ -474,6 +493,9 @@ temperature-unit='centigrade'
 [org/gnome/Weather]
 automatic-location=true
 
+[org/gnome/calendar]
+active-view='month'
+
 [org/gnome/control-center]
 last-panel='keyboard'
 
@@ -485,7 +507,7 @@ font-name='Noto Sans 11'
 gtk-im-module='gtk-im-context-simple'
 gtk-theme='Matcha-azul'
 icon-theme='Papirus-Dark-Maia'
-monospace-font-name='Hack 10'
+monospace-font-name='Liberation Mono 11'
 
 [org/gnome/desktop/peripherals/keyboard]
 numlock-state=true
@@ -559,7 +581,6 @@ cursor-colors-set=true
 cursor-foreground-color='rgb(59,66,82)'
 default-size-columns=100
 default-size-rows=27
-font='Hack Regular 11'
 foreground-color='#D8DEE9'
 highlight-background-color='rgb(136,192,208)'
 highlight-colors-set=true
@@ -567,12 +588,73 @@ highlight-foreground-color='rgb(46,52,64)'
 nord-gnome-terminal-version='0.1.0'
 palette=['#3B4252', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#88C0D0', '#E5E9F0', '#4C566A', '#BF616A', '#A3BE8C', '#EBCB8B', '#81A1C1', '#B48EAD', '#8FBCBB', '#ECEFF4']
 scrollbar-policy='never'
-use-system-font=false
+use-system-font=true
 use-theme-background=false
 use-theme-colors=false
 use-theme-transparency=false
 use-transparent-background=true
 visible-name='Nord'
+
+[org/gnome/evolution/calendar]
+allow-direct-summary-edit=false
+confirm-purge=true
+date-navigator-pane-position=175
+date-navigator-pane-position-sub=175
+hpane-position=3
+month-hpane-position=6
+prefer-new-item=''
+primary-calendar='system-calendar'
+primary-memos='system-memo-list'
+primary-tasks='system-task-list'
+recur-events-italic=false
+tag-vpane-position=0.0019305019305019266
+time-divisions=30
+use-24hour-format=true
+week-start-day-name='monday'
+work-day-friday=true
+work-day-monday=true
+work-day-saturday=false
+work-day-sunday=false
+work-day-thursday=true
+work-day-tuesday=true
+work-day-wednesday=true
+
+[org/gnome/evolution/mail]
+browser-close-on-reply-policy='ask'
+forward-style-name='attached'
+hpaned-size=1618159
+hpaned-size-sub=1594771
+image-loading-policy='never'
+junk-check-custom-header=true
+junk-check-incoming=true
+junk-empty-on-exit-days=0
+junk-lookup-addressbook=false
+layout=1
+paned-size=1210424
+paned-size-sub=1632933
+prompt-on-mark-all-read=true
+reply-style-name='quoted'
+search-gravatar-for-photo=false
+show-to-do-bar=false
+show-to-do-bar-sub=false
+to-do-bar-width=1150000
+to-do-bar-width-sub=1282913
+trash-empty-on-exit-days=0
+
+[org/gnome/evolution/plugin/evolution-on]
+hidden-on-startup=true
+hide-on-close=true
+hide-on-minimize=true
+
+[org/gnome/evolution/shell]
+attachment-view=0
+buttons-visible=true
+default-component-id='mail'
+folder-bar-width=256
+menubar-visible=true
+sidebar-visible=true
+statusbar-visible=false
+toolbar-visible=false
 
 EOT
 
@@ -581,6 +663,87 @@ EOT
   if systemctl is-active --quiet dbus; then
     dconf update
   fi
+
+  locale-gen
+}
+
+function install_gnome_conf_user() {
+  mkdir -p ~/.config/autostart
+  cat <<'EOT' >~/.config/autostart/org.gnome.Evolution.desktop
+[Desktop Entry]
+Name=Evolution
+GenericName=Groupware Suite
+X-GNOME-FullName=Evolution Mail and Calendar
+Comment=Manage your email, contacts and schedule
+Keywords=email;calendar;contact;addressbook;task;
+Actions=new-window;compose;contacts;calendar;mail;memos;tasks;
+Exec=evolution %U
+Icon=evolution
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Office;Email;Calendar;ContactManagement;X-Red-Hat-Base;
+StartupNotify=true
+X-GNOME-Bugzilla-Bugzilla=GNOME
+X-GNOME-Bugzilla-Product=Evolution
+X-GNOME-Bugzilla-Component=BugBuddyBugs
+X-GNOME-Bugzilla-Version=3.38.x
+X-GNOME-Bugzilla-OtherBinaries=evolution-addressbook-factory;evolution-calendar-factory;evolution-source-registry;evolution-user-prompter;
+X-GNOME-UsesNotifications=true
+X-Flatpak-RenamedFrom=evolution
+MimeType=text/calendar;text/x-vcard;text/directory;application/mbox;message/rfc822;x-scheme-handler/mailto;x-scheme-handler/webcal;x-scheme-handler/calendar;x-scheme-handler/task;x-scheme-handler/memo;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=evolution -c current
+
+[Desktop Action compose]
+Name=Compose a Message
+Exec=evolution mailto:
+
+[Desktop Action contacts]
+Name=Contacts
+Exec=evolution -c contacts
+
+[Desktop Action calendar]
+Name=Calendar
+Exec=evolution -c calendar
+
+[Desktop Action mail]
+Name=Mail
+Exec=evolution -c mail
+
+[Desktop Action memos]
+Name=Memos
+Exec=evolution -c memos
+
+[Desktop Action tasks]
+Name=Tasks
+Exec=evolution -c tasks
+EOT
+}
+
+function install_docker_dep_system() {
+  install_official_packages docker docker-compose
+}
+
+function install_docker_conf_system() {
+  systemctl enable docker
+  systemctl start docker
+  usermod -aG docker "$1"
+}
+
+function install_docker_conf_user() {
+  if systemctl is-active --quiet docker; then
+    newgrp docker
+  fi
+}
+
+function install_virtualbox_dep_system() {
+  install_official_packages virtualbox virtualbox-host-modules-arch virtualbox-guest-iso
+}
+
+function install_virtualbox_conf_system() {
+  vboxreload
 }
 
 checkpoint_variables

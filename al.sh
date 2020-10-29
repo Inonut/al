@@ -14,7 +14,10 @@ ROOT_PASSWORD="archlinux"
 ADMIN_NAME="admin"
 ADMIN_PASS="admin"
 TIMEZONE="/usr/share/zoneinfo/Europe/Bucharest"
-PACKAGES=(nano zip unzip wget bash-completion openssh google-chrome )
+LOCALE="ro_RO"
+PACKAGES=(nano zip unzip wget bash-completion openssh seahorse
+          google-chrome variety slack-desktop intellij-idea-ultimate-edition
+          maven npm vagrant packer git)
 
 
 init_log /var/log/al.log
@@ -41,6 +44,7 @@ arch_linux_install
 function arch_linux_configuration() {
   arch_linux_general_configuration "$DEVICE"
   refactor_mirror_list "${REFLECTOR_COUNTRIES[@]}"
+  configure_locale "$LOCALE"
   configure_admin_user "$ADMIN_NAME" "$ADMIN_PASS"
   configure_network
   configure_timezone "$TIMEZONE"
@@ -50,9 +54,11 @@ function arch_linux_configuration() {
 
   configure_needed_for_running_in_vm
 
-  user_chroot_hook install_yay "$ADMIN_NAME"
+  user_chroot_hook "install_yay" "$ADMIN_NAME"
   user_chroot_hook "install_aur_packages ${PACKAGES[*]}" "$ADMIN_NAME"
-  user_chroot_hook install_gnome "$ADMIN_NAME"
+  user_chroot_hook "install_gnome" "$ADMIN_NAME"
+  user_chroot_hook "install_docker $ADMIN_NAME" "$ADMIN_NAME"
+  user_chroot_hook "install_virtualbox" "$ADMIN_NAME"
 }
 
 arch_linux_chroot arch_linux_configuration
